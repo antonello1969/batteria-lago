@@ -1,0 +1,344 @@
+```html
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+ <title>Relè Automatico - Barco Control</title>
+ 
+ <!-- META TAG PWA -->
+ <meta name="mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="apple-mobile-web-app-title" content="Barco Control">
+ <meta name="theme-color" content="#000000">
+ <meta name="color-scheme" content="dark">
+ <meta name="format-detection" content="telephone=no">
+
+ <!-- Collegamento al nuovo file manifest esterno -->
+ <link rel="manifest" href="manifest.json">
+
+ <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23080d19%22 rx=%2222%22/><path d=%22M45 20v20H25l30 40V60h20L45 20z%22 fill=%22%233b82f6%22/></svg>">
+ <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23080d19%22 rx=%2222%22/><path d=%22M45 20v20H25l30 40V60h20L45 20z%22 fill=%22%233b82f6%22/></svg>">
+ 
+ <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+ <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+ <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+ <script src="https://cdn.tailwindcss.com"></script>
+
+ <style>
+ :root {
+ --sat: env(safe-area-inset-top, 0px);
+ --sab: env(safe-area-inset-bottom, 0px);
+ --sal: env(safe-area-inset-left, 0px);
+ --sar: env(safe-area-inset-right, 0px);
+ }
+ * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+ html, body { background-color: #000000; }
+ body {
+ overscroll-behavior-y: contain; color: #f8fafc; user-select: none; -webkit-user-select: none;
+ padding-top: max(0.5rem, var(--sat)); padding-bottom: max(2.5rem, var(--sab));
+ padding-left: max(0.5rem, var(--sal)); padding-right: max(0.5rem, var(--sar));
+ }
+ .smooth-120hz { transform: translateZ(0); backface-visibility: hidden; will-change: transform, opacity; }
+ .touch-target { min-height: 48px; min-width: 48px; touch-action: manipulation; }
+ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+ input[type="number"] { -moz-appearance: textfield; }
+ </style>
+</head>
+<body>
+ <div id="root"></div>
+ <script type="text/babel">
+ const { useState, useEffect, useRef } = React;
+
+ const triggerHaptic = (pattern = 15) => {
+ if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+ try { navigator.vibrate(pattern); } catch (e) {}
+ }
+ };
+
+ const Activity = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+ const BatteryCharging = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 7h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M6 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"/><line x1="11" x2="11" y1="11" y2="17"/><line x1="11" x2="11" y1="7" y2="7"/></svg>;
+ const Power = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" x2="12" y1="2" y2="12"/></svg>;
+ const RefreshCw = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>;
+ const TrendingUp = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>;
+ const Lock = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+ const Unlock = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>;
+ const Zap = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+ const Sliders = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/></svg>;
+ const Check = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+ const User = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+
+ const BatteryChart = ({ historyData }) => {
+ let endTime = Date.now();
+ if (historyData && historyData.length > 0) {
+ const lastPointTime = new Date(historyData[historyData.length - 1].created_at).getTime();
+ if (!isNaN(lastPointTime)) endTime = lastPointTime;
+ }
+ const timeSpan = 24 * 60 * 60 * 1000;
+ const startTime = endTime - timeSpan;
+
+ const validData = (historyData || []).filter(d => {
+ if (!d || !d.created_at) return false;
+ const t = new Date(d.created_at).getTime();
+ return !isNaN(t) && t >= startTime && !isNaN(parseFloat(d.value));
+ }).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+ if (!validData || validData.length < 2) {
+ return (
+ <div className="flex flex-col items-center justify-center h-52 text-slate-500 bg-slate-950/70 rounded-2xl border border-dashed border-slate-800">
+ <Activity className="w-8 h-8 mb-2 opacity-40 animate-pulse" />
+ <span className="text-xs font-medium">Caricamento storico 24h...</span>
+ </div>
+ );
+ }
+
+ let minV = Math.min(...validData.map(d => parseFloat(d.value)));
+ let maxV = Math.max(...validData.map(d => parseFloat(d.value)));
+ let chartMinY = minV < 11.5 ? Math.floor(minV) : 11.5;
+ let chartMaxY = maxV > 15.0 ? Math.ceil(maxV) : 15.0;
+ if (chartMaxY - chartMinY < 2) chartMaxY = chartMinY + 2;
+
+ const ySteps = [];
+ const yStepValue = (chartMaxY - chartMinY) > 6 ? 2 : 1;
+ for (let v = Math.ceil(chartMinY); v <= chartMaxY; v += yStepValue) ySteps.push(v);
+
+ const xSteps = [];
+ const intervalHours = 6; 
+ const startDate = new Date(startTime);
+ startDate.setMinutes(0, 0, 0); 
+ let hoursToAdd = (intervalHours - (startDate.getHours() % intervalHours)) % intervalHours;
+ let stepTime = startDate.getTime() + (hoursToAdd * 60 * 60 * 1000);
+ while (stepTime < endTime) {
+ if (stepTime > startTime && (endTime - stepTime) > (45 * 60 * 1000)) xSteps.push(stepTime);
+ stepTime += intervalHours * 60 * 60 * 1000;
+ }
+
+ const pointObjects = validData.map((d) => {
+ const t = new Date(d.created_at).getTime();
+ const v = parseFloat(d.value);
+ const x = Math.max(0, Math.min(100, ((t - startTime) / timeSpan) * 100));
+ const y = 100 - ((v - chartMinY) / (chartMaxY - chartMinY)) * 100;
+ return { x, y, t };
+ });
+
+ let pathD = ""; let areaD = ""; const MAX_GAP_MS = 30 * 60 * 1000; 
+ for (let i = 0; i < pointObjects.length; i++) {
+ const p = pointObjects[i];
+ if (i === 0) { pathD += `M ${p.x.toFixed(2)},${p.y.toFixed(2)} `; areaD += `M ${p.x.toFixed(2)},100 L ${p.x.toFixed(2)},${p.y.toFixed(2)} `; }
+ else {
+ const prev = pointObjects[i - 1];
+ if (p.t - prev.t > MAX_GAP_MS) {
+ areaD += `L ${prev.x.toFixed(2)},100 `; pathD += `M ${p.x.toFixed(2)},${p.y.toFixed(2)} `; areaD += `M ${p.x.toFixed(2)},100 L ${p.x.toFixed(2)},${p.y.toFixed(2)} `;
+ } else { pathD += `L ${p.x.toFixed(2)},${p.y.toFixed(2)} `; areaD += `L ${p.x.toFixed(2)},${p.y.toFixed(2)} `; }
+ }
+ }
+ if (pointObjects.length > 0) areaD += `L ${pointObjects[pointObjects.length - 1].x.toFixed(2)},100`;
+
+ return (
+ <div className="w-full h-56 sm:h-64 relative bg-slate-950/80 rounded-2xl border border-slate-800/80 p-3 sm:p-5 overflow-hidden shadow-inner smooth-120hz flex flex-col">
+ <div className="flex-1 relative w-full h-full">
+ <div className="absolute inset-0 pointer-events-none z-0">
+ {ySteps.map((val) => (<div key={val} className="absolute w-full border-t border-slate-700/50 flex items-center" style={{ top: `${((chartMaxY - val) / (chartMaxY - chartMinY)) * 100}%` }}><span className="text-[10px] sm:text-[11px] text-slate-500 font-mono -mt-3 bg-[#0a0f1c] px-1 rounded-sm">{val.toFixed(1)}V</span></div>))}
+ </div>
+ <div className="absolute inset-0 pointer-events-none z-0">
+ {xSteps.map(t => (<div key={t} className="absolute h-full border-l border-slate-700/30" style={{ left: `${((t - startTime) / timeSpan) * 100}%` }}></div>))}
+ </div>
+ <svg viewBox="0 0 100 100" className="w-full h-full relative z-10 preserve-3d" preserveAspectRatio="none">
+ <defs><linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3B82F6" stopOpacity="0.4" /><stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" /></linearGradient></defs>
+ <path d={areaD} fill="url(#chartGradient)" />
+ <path d={pathD} fill="none" stroke="#60A5FA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+ </svg>
+ </div>
+ <div className="w-full h-5 mt-2 relative flex items-center border-t border-slate-800/80">
+ {xSteps.map(t => { const dateObj = new Date(t); return (<div key={t} className="absolute text-[10px] sm:text-[11px] text-slate-400 font-bold tracking-wider transform -translate-x-1/2 pt-1" style={{ left: `${((t - startTime) / timeSpan) * 100}%` }}>{`${dateObj.getHours().toString().padStart(2, '0')}:00`}</div>); })}
+ <div className="absolute text-[10px] sm:text-[11px] text-emerald-400 font-bold tracking-wider transform -translate-x-full pt-1 right-0 pr-1" style={{ left: '100%' }}>{`${new Date(endTime).getHours().toString().padStart(2, '0')}:${new Date(endTime).getMinutes().toString().padStart(2, '0')}`}</div>
+ </div>
+ </div>
+ );
+ };
+
+ function BatteryMonitorApp() {
+ const [config] = useState({ username: 'antonello', key: 'aio_Dgdz98SIrnVxhQOTJ31eqiehFWns', connected: true });
+ const [data, setData] = useState({ voltage: 0.0, relayState: false, automationEnabled: true, autoTriggered: false, manualTriggered: false, thresholdOn: 14.2, thresholdOff: 13.0, lastUpdate: null, loading: false, error: null });
+ const [formThresholds, setFormThresholds] = useState({ on: "14.2", off: "13.0" });
+ const isEditingRef = useRef(false);
+ const [isEditingThresholds, setIsEditingThresholds] = useState(false);
+ const [thresholdSaving, setThresholdSaving] = useState(false);
+ const [thresholdFeedback, setThresholdFeedback] = useState(null);
+ const [history, setHistory] = useState([]);
+ const [loadingHistory, setLoadingHistory] = useState(false);
+
+ const getHeaders = () => ({ 'X-AIO-Key': config.key, 'Content-Type': 'application/json' });
+
+ const fetchThresholds = async () => {
+ if (!config.username || !config.key) return;
+ try {
+ const [onRes, offRes] = await Promise.all([
+ fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/soglia-on/data/last`, { headers: getHeaders() }).catch(() => null),
+ fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/soglia-off/data/last`, { headers: getHeaders() }).catch(() => null)
+ ]);
+ let tOn = 14.2; let tOff = 13.0;
+ if (onRes && onRes.ok) { const j = await onRes.json(); const p = parseFloat(j.value); if (!isNaN(p)) tOn = p; }
+ if (offRes && offRes.ok) { const j = await offRes.json(); const p = parseFloat(j.value); if (!isNaN(p)) tOff = p; }
+ setData(prev => ({ ...prev, thresholdOn: tOn, thresholdOff: tOff }));
+ if (!isEditingRef.current) setFormThresholds({ on: tOn.toFixed(1), off: tOff.toFixed(1) });
+ } catch (e) {}
+ };
+
+ const fetchLiveData = async () => {
+ if (!config.username || !config.key) return;
+ try {
+ setData(prev => ({ ...prev, loading: true, error: null }));
+ const [voltageRes, relayRes, autoRes] = await Promise.all([
+ fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/batteria/data/last`, { headers: getHeaders() }),
+ fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/rele/data/last`, { headers: getHeaders() }),
+ fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/automazione/data/last`, { headers: getHeaders() })
+ ]);
+ if (!voltageRes.ok || !relayRes.ok) throw new Error("Errore API");
+ const vJson = await voltageRes.json(); const rJson = await relayRes.json();
+ let autoEnabled = true; if (autoRes.ok) { const aJson = await autoRes.json(); autoEnabled = (aJson.value === "ON"); }
+ const isRelayOn = (rJson.value === 'ON');
+ setData(prev => ({
+ ...prev, voltage: parseFloat(vJson.value), relayState: isRelayOn, automationEnabled: autoEnabled,
+ autoTriggered: isRelayOn && autoEnabled, manualTriggered: isRelayOn && !autoEnabled,
+ lastUpdate: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'}), loading: false, error: null
+ }));
+ } catch (err) { setData(prev => ({ ...prev, loading: false, error: "Offline" })); }
+ };
+
+ const fetchHistory = async () => {
+ if (!config.username || !config.key) return;
+ setLoadingHistory(true);
+ try {
+ const res = await fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/batteria/data/chart?hours=24&resolution=10`, { headers: getHeaders() });
+ if (res.ok) {
+ const json = await res.json();
+ if (json && Array.isArray(json.data)) {
+ setHistory(json.data.filter(i => Array.isArray(i) && i.length >= 2 && i[0] && i[1] !== null).map(i => ({ created_at: i[0], value: i[1] })));
+ }
+ }
+ } catch (err) {} finally { setLoadingHistory(false); }
+ };
+
+ const toggleRelay = async () => {
+ const willTurnOn = !data.relayState;
+ if (willTurnOn && (data.voltage <= 2.0 || isNaN(data.voltage))) { triggerHaptic([50, 40, 50]); alert("Batteria non connessa (0.00V)!"); return; }
+ if (willTurnOn && data.voltage <= data.thresholdOff) { triggerHaptic([50, 40, 50]); alert(`Batteria scarica (${data.voltage.toFixed(2)}V)!`); return; }
+ triggerHaptic(willTurnOn ? [35, 30, 25] : 30);
+ setData(prev => ({ ...prev, relayState: willTurnOn, manualTriggered: willTurnOn, autoTriggered: false, automationEnabled: false }));
+ try {
+ await fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/rele/data`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ value: willTurnOn ? "ON" : "OFF" }) });
+ setTimeout(fetchLiveData, 1500);
+ } catch (err) { triggerHaptic([100, 50, 100]); setData(prev => ({ ...prev, error: "Errore" })); }
+ };
+
+ const toggleAutomation = async () => {
+ const willEnable = !data.automationEnabled; triggerHaptic(willEnable ? 25 : 20);
+ setData(prev => ({ ...prev, automationEnabled: willEnable, relayState: willEnable ? prev.relayState : false, autoTriggered: false }));
+ try {
+ await fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/automazione/data`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ value: willEnable ? "ON" : "OFF" }) });
+ setTimeout(fetchLiveData, 1200);
+ } catch (err) { triggerHaptic([100, 50, 100]); setData(prev => ({ ...prev, automationEnabled: !willEnable, error: "Errore" })); }
+ };
+
+ const adjustValue = (type, delta) => {
+ triggerHaptic(12); isEditingRef.current = true; setIsEditingThresholds(true);
+ setFormThresholds(prev => ({ ...prev, [type]: (Math.round((parseFloat(prev[type]) || (type === 'on' ? 14.2 : 13.0) + delta) * 10) / 10).toFixed(1) }));
+ };
+ const handleInputChange = (type, val) => { isEditingRef.current = true; setIsEditingThresholds(true); setFormThresholds(prev => ({ ...prev, [type]: val })); };
+
+ const handleSaveThresholds = async (e) => {
+ if (e) e.preventDefault();
+ const newOn = parseFloat(formThresholds.on); const newOff = parseFloat(formThresholds.off);
+ if (isNaN(newOn) || isNaN(newOff)) { triggerHaptic([40, 40, 40]); alert("Inserisci valori numerici validi."); return; }
+ if (newOff >= newOn) { triggerHaptic([50, 40, 50]); alert("La soglia OFF deve essere inferiore a ON!"); return; }
+ triggerHaptic(20); setThresholdSaving(true); setThresholdFeedback(null);
+ try {
+ await Promise.all([
+ fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/soglia-on/data`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ value: newOn.toFixed(1) }) }),
+ fetch(`https://io.adafruit.com/api/v2/${config.username}/feeds/soglia-off/data`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ value: newOff.toFixed(1) }) })
+ ]);
+ triggerHaptic([30, 40, 30]); isEditingRef.current = false; setIsEditingThresholds(false);
+ setThresholdFeedback("Soglie salvate!"); setData(prev => ({ ...prev, thresholdOn: newOn, thresholdOff: newOff }));
+ setTimeout(() => setThresholdFeedback(null), 4000);
+ } catch (err) { triggerHaptic([100, 50, 100]); alert("Errore durante il salvataggio."); } finally { setThresholdSaving(false); }
+ };
+
+ useEffect(() => {
+ fetchThresholds(); fetchLiveData(); fetchHistory();
+ const tId = setInterval(fetchLiveData, 30000); const hId = setInterval(fetchHistory, 300000);
+ return () => { clearInterval(tId); clearInterval(hId); };
+ }, []);
+
+ const getVoltageColor = (v) => { if (v <= 2.0) return "text-red-500 animate-pulse"; if (v >= data.thresholdOn) return "text-emerald-400"; if (v <= data.thresholdOff) return "text-red-400"; if (v <= (data.thresholdOff + 0.4)) return "text-yellow-400"; return "text-sky-400"; };
+ const offPercentage = Math.min(100, Math.max(0, ((data.thresholdOff - 11.0) / 4.0) * 100));
+ const onPercentage = Math.min(100, Math.max(0, ((data.thresholdOn - 11.0) / 4.0) * 100));
+ const currentPercentage = data.voltage <= 2.0 ? 0 : Math.min(100, Math.max(0, ((data.voltage - 11.0) / 4.0) * 100));
+
+ return (
+ <div className="min-h-screen text-slate-100 font-sans p-2 sm:p-4 md:p-6 pb-28 max-w-5xl mx-auto">
+ <header className="flex justify-between items-center mb-3 sm:mb-4 bg-black/85 p-3.5 sm:p-4 rounded-2xl border border-slate-800/90 backdrop-blur-xl sticky top-2 z-50 shadow-2xl smooth-120hz">
+ <div className="flex items-center gap-3">
+ <div className="bg-blue-600/20 p-2 sm:p-2.5 rounded-xl border border-blue-500/30 shadow-[0_0_12px_rgba(59,130,246,0.2)]"><Activity className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" /></div>
+ <div>
+ <h1 className="text-lg sm:text-xl font-black leading-tight tracking-tight text-white">Barco Control</h1>
+ <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-bold"><span className={`w-2 h-2 rounded-full ${data.error ? 'bg-red-500' : 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]'}`}></span>{data.error ? 'DISCONNESSO' : `LIVE • ${data.lastUpdate || '...'}`}</div>
+ </div>
+ </div>
+ <button onClick={() => { triggerHaptic(15); fetchLiveData(); fetchHistory(); if (!isEditingRef.current) fetchThresholds(); }} className="touch-target bg-slate-900 active:bg-slate-800 p-3 rounded-xl border border-slate-700/80 transition-all active:scale-95 shadow-md flex items-center justify-center"><RefreshCw className={`w-5 h-5 sm:w-6 sm:h-6 text-slate-300 ${data.loading ? 'animate-spin text-blue-400' : ''}`} /></button>
+ </header>
+
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4">
+ <div className="md:col-span-7 bg-[#080d19] border border-slate-800/90 rounded-2xl p-4 sm:p-5 relative overflow-hidden shadow-xl flex flex-col justify-between min-h-[195px] smooth-120hz">
+ <div className="flex justify-between items-start z-10"><h2 className="text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2"><BatteryCharging className="w-4 h-4 text-sky-400" /> Batteria Servizi (INA219)</h2>{data.voltage <= 2.0 && (<span className="text-[10px] font-black uppercase tracking-wider text-red-400 bg-red-950/90 border border-red-700/80 px-2.5 py-1 rounded-full animate-pulse flex items-center gap-1.5 shadow-lg"><span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,1)]"></span> Non Connessa (0V)</span>)}</div>
+ <div className="flex items-baseline gap-1.5 my-2 z-10"><span className={`text-6xl sm:text-7xl font-black font-mono tracking-tighter ${getVoltageColor(data.voltage)} drop-shadow-sm`}>{data.voltage.toFixed(2)}</span><span className="text-xl sm:text-2xl text-slate-500 font-bold">V</span></div>
+ <div className="mt-2 z-10">
+ <div className="w-full h-5 sm:h-6 bg-black rounded-full border border-slate-800 relative overflow-hidden shadow-inner">
+ <div className="absolute top-0 bottom-0 w-1 bg-red-500 z-20 shadow-[0_0_8px_rgba(239,68,68,1)]" style={{ left: `${offPercentage}%` }} />
+ <div className="absolute top-0 bottom-0 w-1 bg-emerald-400 z-20 shadow-[0_0_8px_rgba(52,211,153,1)]" style={{ left: `${onPercentage}%` }} />
+ <div className={`h-full transition-all duration-700 ease-out ${data.voltage <= data.thresholdOff ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-400'}`} style={{ width: `${currentPercentage}%` }} />
+ </div>
+ <div className="flex justify-between text-[10px] sm:text-[11px] text-slate-400 font-bold font-mono mt-1.5 px-1"><span>11.0V</span><span className="text-red-400">{data.thresholdOff.toFixed(1)}V (Stacco)</span><span className="text-emerald-400">{data.thresholdOn.toFixed(1)}V (Attacco)</span><span>15.0V</span></div>
+ </div>
+ </div>
+
+ <div className={`md:col-span-5 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative shadow-xl transition-all duration-300 min-h-[195px] smooth-120hz ${data.relayState ? 'bg-[#08131d] border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.12)]' : 'bg-[#080d19] border-slate-800/90'}`}>
+ <div className="flex justify-between items-start"><h2 className="text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2"><Power className="w-4 h-4 text-emerald-400" /> Relè Utenze (D5)</h2><div className={`w-4 h-4 rounded-full border-2 border-black transition-all ${data.relayState ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,1)] scale-110' : 'bg-slate-700'}`}></div></div>
+ <div className="text-center my-2.5 flex flex-col items-center gap-1.5"><span className={`text-3xl sm:text-4xl font-black tracking-wider ${data.relayState ? 'text-emerald-400 drop-shadow-md' : 'text-slate-500'}`}>{data.relayState ? 'ATTIVO (ON)' : 'SPENTO (OFF)'}</span>{data.relayState && (<span className={`text-[11px] font-bold px-3 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm ${data.autoTriggered ? 'bg-blue-950/80 text-blue-300 border border-blue-500/40 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'}`}>{data.autoTriggered ? <Zap className="w-3.5 h-3.5 text-blue-400 fill-blue-400" /> : <User className="w-3.5 h-3.5 text-emerald-400" />}{data.autoTriggered ? "Acceso Automatico" : "Acceso Manualmente"}</span>)}</div>
+ <button onClick={toggleRelay} className={`touch-target w-full py-4 min-h-[56px] rounded-xl font-black text-base tracking-wider transition-all duration-150 active:scale-[0.97] shadow-xl flex items-center justify-center gap-3 border ${data.relayState ? 'bg-slate-900 text-rose-400 border-rose-900/40 active:bg-rose-950/50 hover:bg-slate-850' : 'bg-emerald-600 text-white border-emerald-500 active:bg-emerald-700 shadow-emerald-950/60 hover:bg-emerald-500'}`}><Power className="w-5 h-5" />{data.relayState ? 'SPEGNI MANUALMENTE' : 'ACCENDI MANUALMENTE'}</button>
+ </div>
+
+ <div className="md:col-span-8 bg-[#080d19] border border-slate-800/90 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between smooth-120hz">
+ <div className="flex justify-between items-center mb-3"><h2 className="text-slate-300 text-xs font-bold uppercase tracking-widest flex items-center gap-2"><Sliders className="w-4 h-4 text-blue-400" /> Regolazione Soglie Protezione Batteria</h2>{thresholdFeedback && (<span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1 animate-pulse"><Check className="w-3.5 h-3.5" /> {thresholdFeedback}</span>)}</div>
+ <form onSubmit={handleSaveThresholds} className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+ <div className="bg-black/80 p-3.5 sm:p-4 rounded-xl border border-slate-800/80 flex flex-col justify-between shadow-inner">
+ <div className="flex justify-between items-center mb-1"><span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]"></span> Accendi Relè a (ON)</span><span className="text-[10px] text-slate-500 font-mono">Surplus Carica</span></div>
+ <div className="flex items-center justify-between gap-3 mt-2.5"><button type="button" onClick={() => adjustValue('on', -0.1)} className="touch-target w-12 h-12 rounded-xl bg-slate-900 active:bg-slate-800 border border-slate-800 text-slate-200 font-black text-2xl active:scale-90 transition-all shadow">-</button><div className="flex items-baseline gap-1"><input type="number" step="0.1" min="9.0" max="16.0" value={formThresholds.on} onChange={(e) => handleInputChange('on', e.target.value)} className="w-24 text-center text-3xl font-black font-mono bg-transparent text-emerald-400 border-b-2 border-slate-700 focus:border-emerald-400 focus:outline-none" /><span className="text-sm text-slate-500 font-bold">V</span></div><button type="button" onClick={() => adjustValue('on', 0.1)} className="touch-target w-12 h-12 rounded-xl bg-slate-900 active:bg-slate-800 border border-slate-800 text-slate-200 font-black text-2xl active:scale-90 transition-all shadow">+</button></div>
+ </div>
+ <div className="bg-black/80 p-3.5 sm:p-4 rounded-xl border border-slate-800/80 flex flex-col justify-between shadow-inner">
+ <div className="flex justify-between items-center mb-1"><span className="text-xs font-bold text-rose-400 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]"></span> Spegni Relè a (OFF)</span><span className="text-[10px] text-slate-500 font-mono">Protezione Scarica</span></div>
+ <div className="flex items-center justify-between gap-3 mt-2.5"><button type="button" onClick={() => adjustValue('off', -0.1)} className="touch-target w-12 h-12 rounded-xl bg-slate-900 active:bg-slate-800 border border-slate-800 text-slate-200 font-black text-2xl active:scale-90 transition-all shadow">-</button><div className="flex items-baseline gap-1"><input type="number" step="0.1" min="9.0" max="16.0" value={formThresholds.off} onChange={(e) => handleInputChange('off', e.target.value)} className="w-24 text-center text-3xl font-black font-mono bg-transparent text-rose-400 border-b-2 border-slate-700 focus:border-rose-400 focus:outline-none" /><span className="text-sm text-slate-500 font-bold">V</span></div><button type="button" onClick={() => adjustValue('off', 0.1)} className="touch-target w-12 h-12 rounded-xl bg-slate-900 active:bg-slate-800 border border-slate-800 text-slate-200 font-black text-2xl active:scale-90 transition-all shadow">+</button></div>
+ </div>
+ <div className="sm:col-span-2 flex flex-col sm:flex-row items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-800/80"><span className="text-[11px] text-slate-400 font-mono text-center sm:text-left">Consigliati: 13.0V (Stacco) • 14.2V (Attacco)</span><button type="submit" disabled={thresholdSaving} className="touch-target w-full sm:w-auto px-6 py-3.5 min-h-[50px] rounded-xl font-black text-xs tracking-wider bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"><Check className="w-4 h-4" />{thresholdSaving ? "SALVATAGGIO..." : "SALVA SOGLIE"}</button></div>
+ </form>
+ </div>
+
+ <div className="md:col-span-4 bg-[#080d19] border border-slate-800/90 rounded-2xl p-4 flex flex-col gap-3 justify-between shadow-xl smooth-120hz">
+ <div className="bg-black/80 p-4 rounded-xl border border-slate-800/80 flex items-center justify-between shadow-inner"><div className="flex flex-col"><span className="text-sm font-bold text-slate-200 flex items-center gap-2">{data.automationEnabled ? <Lock className="w-4 h-4 text-blue-400"/> : <Unlock className="w-4 h-4 text-orange-400"/>} Automazione</span><span className="text-[10px] text-slate-500 mt-1">{data.automationEnabled ? "Soglie attive" : "Disattivata (Relè spento)"}</span></div><button onClick={toggleAutomation} className={`touch-target w-16 h-9 rounded-full p-1 transition-all duration-300 ease-in-out flex items-center shadow-inner ${data.automationEnabled ? 'bg-blue-600 justify-end' : 'bg-slate-800 justify-start'}`}><div className="w-7 h-7 bg-white rounded-full shadow-lg transform transition-transform"></div></button></div>
+ <div className={`flex items-center justify-between p-3.5 rounded-xl border transition-all duration-500 ${data.autoTriggered ? 'bg-blue-950/30 border-blue-500/60 shadow-[0_0_18px_rgba(59,130,246,0.2)]' : 'bg-black/60 border-slate-800/60'}`}><span className="text-xs text-slate-400 font-bold flex items-center gap-2"><Zap className={`w-4 h-4 ${data.autoTriggered ? 'text-blue-400 fill-blue-400' : 'text-slate-600'}`}/> Intervento Automatico</span><div className="flex items-center gap-2"><span className={`font-mono text-sm font-bold ${data.autoTriggered ? 'text-blue-400' : 'text-slate-600'}`}>{data.autoTriggered ? "ON" : "OFF"}</span><div className={`w-3.5 h-3.5 rounded-full border border-black transition-all duration-300 ${data.autoTriggered ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,1)] scale-110' : 'bg-slate-800'}`}></div></div></div>
+ </div>
+
+ <div className="md:col-span-12 bg-[#080d19] border border-slate-800/90 rounded-2xl p-4 sm:p-5 shadow-xl smooth-120hz flex flex-col h-[350px]">
+ <div className="flex justify-between items-center mb-2.5 shrink-0"><h2 className="text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2"><TrendingUp className="w-4 h-4 text-sky-400" /> Storico Tensione Batteria 24h</h2>{loadingHistory && <span className="text-[10px] text-blue-400 animate-pulse font-bold tracking-wider">AGGIORNO...</span>}</div>
+ <div className="flex-1 min-h-0 w-full"><BatteryChart historyData={history} /></div>
+ </div>
+ </div>
+ </div>
+ );
+ }
+ const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<BatteryMonitorApp />);
+ </script>
+</body>
+</html>
+```
